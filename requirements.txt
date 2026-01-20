@@ -1,0 +1,6 @@
+streamlit
+st-cytoscape
+pandas
+sqlalchemy
+psycopg2-binary
+python-dotenv

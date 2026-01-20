@@ -284,3 +284,64 @@ def get_updates_by_author(author_name: str):
             })
     return sorted(results, key=lambda x: x['date'], reverse=True)
 
+
+# --- REPORT GENERATION ---
+
+def generate_project_report(project_id: str) -> str:
+    db = _get_session()
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project: return "Project not found."
+    
+    # 1. Stats
+    all_hyps = db.query(Hypothesis).filter(Hypothesis.project_id == project_id).all()
+    status_counts = {"open": 0, "proven": 0, "disproven": 0, "tested": 0}
+    for h in all_hyps:
+        if h.status in status_counts:
+            status_counts[h.status] += 1
+            
+    # 2. Build Tree Structure (Recursive)
+    def build_tree_md(h_id, depth=0):
+        h = db.query(Hypothesis).filter(Hypothesis.id == h_id).first()
+        if not h: return ""
+        
+        indent = "  " * depth
+        icon = "🟦"
+        if h.status == "proven": icon = "✅"
+        elif h.status == "disproven": icon = "❌"
+        elif h.status == "tested": icon = "⚠️"
+        
+        line = f"{indent}- {icon} **{h.status.upper()}**: {h.statement}\n"
+        
+        # Children
+        children = db.query(Hypothesis).filter(Hypothesis.parent_id == h_id).all()
+        for child in children:
+            line += build_tree_md(child.id, depth + 1)
+        return line
+
+    tree_md = build_tree_md(project.north_star_hypothesis_id)
+    
+    # 3. Evidence Log
+    evidence_md = ""
+    updates = db.query(Update).join(Hypothesis).filter(Hypothesis.project_id == project_id).order_by(Update.date.desc()).limit(50).all()
+    
+    for u in updates:
+        date_str = time.strftime('%Y-%m-%d', time.localtime(u.date))
+        evidence_md += f"- **{date_str}** ({u.author}): {u.content} *[{u.evidence_status}]*\n"
+
+    # Assemble Report
+    report = f"""# Project Report: {project.title}
+Generated: {time.strftime('%Y-%m-%d %H:%M')}
+
+## Executive Summary
+- **Total Hypotheses**: {len(all_hyps)}
+- **Proven**: {status_counts['proven']}
+- **Disproven**: {status_counts['disproven']}
+- **Open**: {status_counts['open']}
+
+## Hypothesis Tree
+{tree_md}
+
+## Recent Evidence Log
+{evidence_md}
+"""
+    return report

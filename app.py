@@ -222,6 +222,17 @@ def main():
         st.title(f"Project: {project.title}")
         
         st.sidebar.divider()
+        st.sidebar.header("Project Actions")
+        
+        # Report Generation
+        report_md = dm.generate_project_report(project.id)
+        st.sidebar.download_button(
+             label="📄 Download Report (MD)",
+             data=report_md,
+             file_name=f"report_{project.title}_{int(time.time())}.md",
+             mime="text/markdown"
+        )
+
         st.sidebar.header("History & Versioning")
         snapshots = dm.get_snapshots(project.id)
         
